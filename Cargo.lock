@@ -1660,6 +1660,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu04"
+version = "0.1.0"
+dependencies = [
+ "pollster",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "widestring"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

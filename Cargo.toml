@@ -1,0 +1,11 @@
+[workspace]
+members = ["wgpu01"]
+resolver = "2"
+
+[workspace.dependencies]
+bytemuck = { version = "1.14.3", features = ["derive"] }
+cgmath = "0.18.0"
+image = "0.24.9"
+pollster = "0.3.0"
+wgpu = "0.19.1"
+winit = "0.29.11"

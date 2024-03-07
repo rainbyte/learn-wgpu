@@ -1,5 +1,13 @@
 [workspace]
-members = ["wgpu01", "wgpu02", "wgpu03", "wgpu04", "wgpu05", "wgpu06"]
+members = [
+    "wgpu01",
+    "wgpu02",
+    "wgpu03",
+    "wgpu04",
+    "wgpu05",
+    "wgpu06",
+    "wgpu07",
+]
 resolver = "2"
 
 [workspace.dependencies]

@@ -1,6 +1,7 @@
 mod common;
 
 use winit::event_loop::EventLoop;
+use winit::window::Window;
 
 fn main() {
     let mut primitive_type = "triangle-list";
@@ -21,8 +22,9 @@ fn main() {
         topology: topology,
         strip_index_format: index_format,
     };
+    let window_attributes = Window::default_attributes();
     let event_loop = EventLoop::new().unwrap();
-    let window = winit::window::Window::new(&event_loop).unwrap();
+    let window = event_loop.create_window(window_attributes).unwrap();
     window.set_title(&*format!("{}: {}", "Primitive", primitive_type));
 
     pollster::block_on(common::run(event_loop, &window, inputs, 9));

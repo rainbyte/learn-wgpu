@@ -13,11 +13,9 @@ pub struct Inputs<'a> {
 
 pub async fn run(event_loop: EventLoop<()>, window: &Window, inputs: Inputs<'_>, num_vertices: u32) {
     let size = window.inner_size();
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
-        flags: Default::default(),
-        dx12_shader_compiler: Default::default(),
-        gles_minor_version: Default::default()
+        ..Default::default()
     });
     let surface = instance
         .create_surface(&window)
@@ -36,9 +34,11 @@ pub async fn run(event_loop: EventLoop<()>, window: &Window, inputs: Inputs<'_>,
             &wgpu::DeviceDescriptor {
                 label: None,
                 required_features: wgpu::Features::empty(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 required_limits: wgpu::Limits::default(),
+                memory_hints: Default::default(),
+                trace: wgpu::Trace::Off,
             },
-            None,
         )
         .await
         .expect("Failed to create device");
@@ -67,7 +67,7 @@ pub async fn run(event_loop: EventLoop<()>, window: &Window, inputs: Inputs<'_>,
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
-        push_constant_ranges: &[],
+        immediate_size: 0,
     });
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -75,12 +75,13 @@ pub async fn run(event_loop: EventLoop<()>, window: &Window, inputs: Inputs<'_>,
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader,
-            entry_point: "vs_main",
+            entry_point: Some("vs_main"),
             buffers: &[],
+            compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: "fs_main",
+            entry_point: Some("fs_main"),
             targets: &[Some(wgpu::ColorTargetState {
                 format,
                 blend: Some(wgpu::BlendState {
@@ -88,7 +89,8 @@ pub async fn run(event_loop: EventLoop<()>, window: &Window, inputs: Inputs<'_>,
                     alpha: wgpu::BlendComponent::REPLACE,
                 }),
                 write_mask: wgpu::ColorWrites::ALL,
-            })]
+            })],
+            compilation_options: Default::default(),
         }),
         primitive: wgpu::PrimitiveState {
             topology: inputs.topology,
@@ -97,7 +99,8 @@ pub async fn run(event_loop: EventLoop<()>, window: &Window, inputs: Inputs<'_>,
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        cache: None,
+        multiview_mask: None,
     });
 
     let _ = event_loop.run(move |event, elwt| {
@@ -130,11 +133,13 @@ pub async fn run(event_loop: EventLoop<()>, window: &Window, inputs: Inputs<'_>,
                                     wgpu::Color {r: 0.0, g: 0.0, b: 0.0, a: 1.0}),
 //                                    wgpu::Color {r: 1.0, g: 0.0, b: 1.0, a: 1.0}), // background color
                                 store: wgpu::StoreOp::Store,
-                            }
+                            },
+                            depth_slice: None,
                         })],
                         depth_stencil_attachment: None,
                         timestamp_writes: None,
                         occlusion_query_set: None,
+                        multiview_mask: None,
                     });
                     rpass.set_pipeline(&render_pipeline);
                     rpass.draw(0..num_vertices, 0..1);

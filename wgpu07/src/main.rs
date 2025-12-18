@@ -29,7 +29,7 @@ fn vertex(p: [i8; 3], c: [i8; 3]) -> Vertex {
             p[1] as f32,
             p[2] as f32,
             1.0
-        ], 
+        ],
         color: [
             c[0] as f32,
             c[1] as f32,
@@ -140,7 +140,7 @@ impl State<'_> {
         let pipeline_layout = init.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[&uniform_bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let pipeline = init.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -148,12 +148,13 @@ impl State<'_> {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[Vertex::desc()],
+                compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: init.config.format,
                     blend: Some(wgpu::BlendState {
@@ -161,7 +162,8 @@ impl State<'_> {
                         alpha: wgpu::BlendComponent::REPLACE,
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
-                })]
+                })],
+                compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -176,7 +178,8 @@ impl State<'_> {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            cache: None,
+            multiview_mask: None,
         });
 
         let vertex_buffer = init.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -269,7 +272,8 @@ impl State<'_> {
                                 a: 1.0
                             }),
                         store: wgpu::StoreOp::Store,
-                    }
+                    },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: Some(
                     wgpu::RenderPassDepthStencilAttachment {
@@ -283,6 +287,7 @@ impl State<'_> {
                 ),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
@@ -297,8 +302,9 @@ impl State<'_> {
 }
 
 fn main() {
+    let window_attributes = Window::default_attributes();
     let event_loop = EventLoop::new().unwrap();
-    let window = winit::window::Window::new(&event_loop).unwrap();
+    let window = event_loop.create_window(window_attributes).unwrap();
     window.set_title(&*format!("{}", "Cube with distinct face colors"));
 
     let mut state = pollster::block_on(State::new(window));

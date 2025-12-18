@@ -5,10 +5,10 @@ use winit::{
 };
 
 fn main() {
+    let window_attributes = Window::default_attributes();
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Wait);
-
-    let window = Window::new(&event_loop).unwrap();
+    let window = event_loop.create_window(window_attributes).unwrap();
     window.set_title("My window");
     //env_logger::init();
 

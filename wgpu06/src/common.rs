@@ -67,11 +67,9 @@ pub struct State<'a> {
 impl State<'_> {
     pub async fn new(window: Window) -> Self {
         let size = window.inner_size();
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
-            flags: Default::default(),
-            dx12_shader_compiler: Default::default(),
-            gles_minor_version: Default::default()
+            ..Default::default()
         });
         let surface = instance
             .create_surface(window)
@@ -84,22 +82,24 @@ impl State<'_> {
             })
             .await
             .expect("Failed to find an appropriate adapter");
-    
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
                     required_features: wgpu::Features::empty(),
+                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
                     required_limits: wgpu::Limits::default(),
+                    memory_hints: Default::default(),
+                    trace: wgpu::Trace::Off,
                 },
-                None,
             )
             .await
             .expect("Failed to create device");
-    
+
         let surface_caps = surface.get_capabilities(&adapter);
         let format = surface_caps.formats[0];
-    
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
@@ -111,30 +111,31 @@ impl State<'_> {
             desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &config);
-    
+
         // Load the shaders from disk
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
-    
+
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
-    
+
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[Vertex::desc()],
+                compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
                     blend: Some(wgpu::BlendState {
@@ -142,7 +143,8 @@ impl State<'_> {
                         alpha: wgpu::BlendComponent::REPLACE,
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
-                })]
+                })],
+                compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -151,7 +153,8 @@ impl State<'_> {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            cache: None,
+            multiview_mask: None,
         });
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -216,13 +219,14 @@ impl State<'_> {
                                 b: 0.0,
                                 a: 1.0
                             }),
-//                          wgpu::Color {r: 1.0, g: 0.0, b: 1.0, a: 1.0}), // background color
                         store: wgpu::StoreOp::Store,
-                    }
+                    },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));

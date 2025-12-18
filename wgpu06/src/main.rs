@@ -4,11 +4,13 @@ use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::EventLoop,
     keyboard::{KeyCode, PhysicalKey},
+    window::Window,
 };
 
 fn main() {
+    let window_attributes = Window::default_attributes();
     let event_loop = EventLoop::new().unwrap();
-    let window = winit::window::Window::new(&event_loop).unwrap();
+    let window = event_loop.create_window(window_attributes).unwrap();
     window.set_title(&*format!("{}", "Square"));
 
     let mut state = pollster::block_on(common::State::new(window));

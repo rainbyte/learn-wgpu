@@ -21,11 +21,9 @@ pub struct InitWgpu<'a> {
 impl InitWgpu<'_> {
     pub async fn init_wgpu(window: Window) -> Self {
         let size = window.inner_size();
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
-            flags: Default::default(),
-            dx12_shader_compiler: Default::default(),
-            gles_minor_version: Default::default()
+            ..Default::default()
         });
         let surface = instance
             .create_surface(window)
@@ -38,22 +36,24 @@ impl InitWgpu<'_> {
             })
             .await
             .expect("Failed to find an appropriate adapter");
-    
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
                     required_features: wgpu::Features::empty(),
+                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
                     required_limits: wgpu::Limits::default(),
+                    memory_hints: Default::default(),
+                    trace: wgpu::Trace::Off,
                 },
-                None,
             )
             .await
             .expect("Failed to create device");
-    
+
         let surface_caps = surface.get_capabilities(&adapter);
         let format = surface_caps.formats[0];
-    
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
@@ -65,7 +65,7 @@ impl InitWgpu<'_> {
             desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &config);
-    
+
         Self {
             instance,
             surface,

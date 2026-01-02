@@ -9,6 +9,7 @@ members = [
     "wgpu07",
     "wgpu08",
     "wgpu09",
+    "wgpu10",
 ]
 resolver = "2"
 

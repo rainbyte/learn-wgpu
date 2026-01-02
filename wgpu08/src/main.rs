@@ -1,4 +1,5 @@
 use std::{iter, mem};
+use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
 use cgmath::*;
@@ -14,6 +15,7 @@ mod vertex_data;
 mod transforms;
 
 const IS_PERSPECTIVE: bool = true;
+const ANIMATION_SPEED: f32 = 1.0;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -70,11 +72,12 @@ pub struct State<'a> {
     model_mat: Matrix4<f32>,
     view_mat: Matrix4<f32>,
     project_mat: Matrix4<f32>,
+    window: Arc<Window>,
 }
 
 impl State<'_> {
-    pub async fn new(window: Window) -> Self {
-        let init = transforms::InitWgpu::init_wgpu(window).await;
+    pub async fn new(window: Arc<Window>) -> Self {
+        let init = transforms::InitWgpu::init_wgpu(window.clone()).await;
 
         // Load the shaders from disk
         let shader = init.device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -197,6 +200,7 @@ impl State<'_> {
             model_mat,
             view_mat,
             project_mat,
+            window,
         }
     }
 
@@ -225,9 +229,23 @@ impl State<'_> {
         false
     }
 
-    pub fn update(&mut self) {}
+    pub fn update(&mut self, dt: std::time::Duration) {
+        // update uniform buffer
+        let dt = ANIMATION_SPEED * dt.as_secs_f32();
+        let model_mat = transforms::create_transforms(
+            [0.0, 0.0, 0.0],
+            [dt.sin(), dt.cos(), 0.0],
+            [1.0, 1.0, 1.0]
+        );
+        let mvp_mat = self.project_mat * self.view_mat * model_mat;
+        let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
+        self.init.queue.write_buffer(
+            &self.uniform_buffer, 0, bytemuck::cast_slice(mvp_ref)
+        );
+    }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        self.window.request_redraw();
         let frame = self.init.surface.get_current_texture().unwrap();
         let view = frame
             .texture
@@ -304,10 +322,14 @@ impl State<'_> {
 fn main() {
     let window_attributes = Window::default_attributes();
     let event_loop = EventLoop::new().unwrap();
-    let window = event_loop.create_window(window_attributes).unwrap();
+    let window = Arc::new(
+        event_loop.create_window(window_attributes).unwrap()
+    );
     window.set_title(&*format!("{}", "Cube with distinct face colors"));
 
     let mut state = pollster::block_on(State::new(window));
+
+    let start_time = std::time::Instant::now();
     let _ = event_loop.run(move |event, elwt| {
         match event {
             Event::WindowEvent {
@@ -325,7 +347,9 @@ fn main() {
                         ..
                     } => elwt.exit(),
                     WindowEvent::RedrawRequested => {
-                        state.update();
+                        let now = std::time::Instant::now();
+                        let dt = now - start_time;
+                        state.update(dt);
                         match state.render() {
                             Ok(_) => {},
                             Err(wgpu::SurfaceError::Lost)

@@ -1,4 +1,6 @@
 use std::f32::consts::PI;
+use std::sync::Arc;
+
 use winit::window::Window;
 use cgmath::*;
 
@@ -19,7 +21,7 @@ pub struct InitWgpu<'a> {
 }
 
 impl InitWgpu<'_> {
-    pub async fn init_wgpu(window: Window) -> Self {
+    pub async fn init_wgpu(window: Arc<Window>) -> Self {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,

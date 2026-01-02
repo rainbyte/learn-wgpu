@@ -19,9 +19,31 @@ const ANIMATION_SPEED : f32 = 1.0;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct Light {
+    color: [f32; 4],
+    specular_color: [f32; 4],
+    ambient_intensity: f32,
+    diffuse_intensity: f32,
+    specular_intensity: f32,
+    specular_shininess: f32,
+}
+
+pub fn light(c: [f32; 3], sc: [f32; 3], ai: f32, di: f32, si: f32, ss: f32) -> Light {
+    Light {
+        color: [c[0], c[1], c[2], 1.0],
+        specular_color: [sc[0], sc[1], sc[2], 1.0],
+        ambient_intensity: ai,
+        diffuse_intensity: di,
+        specular_intensity: si,
+        specular_shininess: ss,
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
     pub position: [f32; 4],
-    pub color: [f32; 4],
+    pub normal: [f32; 4],
 }
 
 impl Vertex {
@@ -40,16 +62,18 @@ pub struct State<'a> {
     init: transforms::InitWgpu<'a>,
     pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
-    uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
-    model_mat: Matrix4<f32>,
+    vertex_uniform_buffer: wgpu::Buffer,
     view_mat: Matrix4<f32>,
     project_mat: Matrix4<f32>,
+    num_vertices: u32,
     window: Arc<Window>,
 }
 
 impl State<'_> {
-    pub async fn new(window: Arc<Window>, vertex_data: &Vec<Vertex>) -> Self {
+    pub async fn new(
+        window: Arc<Window>, vertex_data: &Vec<Vertex>, light_data: Light
+    ) -> Self {
         let init = transforms::InitWgpu::init_wgpu(window.clone()).await;
 
         // Load the shaders from disk
@@ -68,36 +92,90 @@ impl State<'_> {
             [0.0, 0.0, 0.0],
             [1.0, 1.0, 1.0]
         );
-        let (view_mat, project_mat, view_project_mat) =
+        let (view_mat, project_mat, _) =
             transforms::create_view_projection(
                 camera_position, look_direction, up_direction,
                 init.config.width as f32 / init.config.height as f32,
                 IS_PERSPECTIVE
             );
-        let mvp_mat = view_project_mat * model_mat;
 
-        let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
-        let uniform_buffer = init.device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Uniform Buffer"),
-                contents: bytemuck::cast_slice(mvp_ref),
+        let vertex_uniform_buffer = init.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("Vertex Uniform Buffer"),
+                size: 192,
                 usage: wgpu::BufferUsages::UNIFORM
                      | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
             }
+        );
+
+        let fragment_uniform_buffer = init.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("Fragment Uniform Buffer"),
+                size: 32,
+                usage: wgpu::BufferUsages::UNIFORM
+                     | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }
+        );
+
+        let light_position: &[f32; 3] = camera_position.as_ref();
+        let eye_position: &[f32; 3] = camera_position.as_ref();
+        init.queue.write_buffer(
+            &fragment_uniform_buffer, 0, bytemuck::cast_slice(light_position)
+        );
+        init.queue.write_buffer(
+            &fragment_uniform_buffer, 16, bytemuck::cast_slice(eye_position)
+        );
+
+        let light_uniform_buffer = init.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("Light Uniform Buffer"),
+                size: 48,
+                usage: wgpu::BufferUsages::UNIFORM
+                     | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }
+        );
+
+        init.queue.write_buffer(
+            &light_uniform_buffer, 0, bytemuck::cast_slice(&[light_data])
         );
 
         let uniform_bind_group_layout = init.device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }
+                ],
                 label: Some("Uniform Bind Group Layout"),
             }
         );
@@ -105,10 +183,20 @@ impl State<'_> {
         let uniform_bind_group = init.device.create_bind_group(
             &wgpu::BindGroupDescriptor {
                 layout: &uniform_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                }],
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: vertex_uniform_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: fragment_uniform_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: light_uniform_buffer.as_entire_binding(),
+                    },
+                ],
                 label: Some("Uniform Bind Group"),
             }
         );
@@ -163,16 +251,17 @@ impl State<'_> {
             contents: bytemuck::cast_slice(&vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
         });
+        let num_vertices = vertex_data.len() as u32;
 
         Self {
             init,
             pipeline,
             vertex_buffer,
-            uniform_buffer,
             uniform_bind_group,
-            model_mat,
+            vertex_uniform_buffer,
             view_mat,
             project_mat,
+            num_vertices,
             window,
         }
     }
@@ -188,11 +277,6 @@ impl State<'_> {
 
             self.project_mat = transforms::create_projection(
                 new_size.width as f32 / new_size.height as f32, IS_PERSPECTIVE
-            );
-            let mvp_mat = self.project_mat * self.view_mat * self.model_mat;
-            let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
-            self.init.queue.write_buffer(
-                &self.uniform_buffer, 0, bytemuck::cast_slice(mvp_ref)
             );
         }
     }
@@ -210,10 +294,28 @@ impl State<'_> {
             [dt.sin(), dt.cos(), 0.0],
             [1.0, 1.0, 1.0]
         );
-        let mvp_mat = self.project_mat * self.view_mat * model_mat;
-        let mvp_ref: &[f32; 16] = mvp_mat.as_ref();
+        let view_project_mat = self.project_mat * self.view_mat;
+
+        let normal_mat = (model_mat.invert().unwrap()).transpose();
+
+        let model_ref: &[f32; 16] = model_mat.as_ref();
+        let view_projection_ref: &[f32; 16] = view_project_mat.as_ref();
+        let normal_ref: &[f32; 16] = normal_mat.as_ref();
+
         self.init.queue.write_buffer(
-            &self.uniform_buffer, 0, bytemuck::cast_slice(mvp_ref)
+            &self.vertex_uniform_buffer,
+            0,
+            bytemuck::cast_slice(model_ref)
+        );
+        self.init.queue.write_buffer(
+            &self.vertex_uniform_buffer,
+            64,
+            bytemuck::cast_slice(view_projection_ref)
+        );
+        self.init.queue.write_buffer(
+            &self.vertex_uniform_buffer,
+            128,
+            bytemuck::cast_slice(normal_ref)
         );
     }
 
@@ -292,7 +394,7 @@ impl State<'_> {
     }
 }
 
-pub fn run(vertex_data: &Vec<Vertex>, title: &str) {
+pub fn run(vertex_data: &Vec<Vertex>, light_data: Light, title: &str) {
     let window_attributes = Window::default_attributes();
     let event_loop = EventLoop::new().unwrap();
     let window = Arc::new(
@@ -301,7 +403,7 @@ pub fn run(vertex_data: &Vec<Vertex>, title: &str) {
     window.set_title(&*format!("{}", title));
 
     let mut state = pollster::block_on(
-        State::new(window, &vertex_data)
+        State::new(window, &vertex_data, light_data)
     );
 
     let start_time = std::time::Instant::now();

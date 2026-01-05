@@ -385,7 +385,7 @@ impl State<'_> {
             rpass.set_pipeline(&self.pipeline);
             rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             rpass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            rpass.draw(0..36, 0..1);
+            rpass.draw(0..self.num_vertices, 0..1);
         }
         self.init.queue.submit(iter::once(encoder.finish()));
         frame.present();

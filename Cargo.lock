@@ -2097,6 +2097,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu11"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "cgmath",
+ "pollster",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "winapi-util"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

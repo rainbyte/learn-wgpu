@@ -44,6 +44,61 @@ pub fn sphere_data(
     (positions, normals, uvs)
 }
 
+pub fn torus_data(
+    r_torus: f32, r_tube: f32, n_torus: usize, n_tube: usize
+) -> (Vec<[f32; 3]>, Vec<[f32; 3]>) {
+    let capacity: usize = 4 * (n_torus - 1) * (n_tube - 1);
+    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(capacity);
+    let mut normals: Vec<[f32; 3]> = Vec::with_capacity(capacity);
+
+    for i in 0..n_torus - 1 {
+        for j in 0..n_tube - 1 {
+            let u0 = i as f32 * 360.0 / (n_torus as f32 - 1.0);
+            let v0 = j as f32 * 360.0 / (n_tube as f32 - 1.0);
+            let u1 = (i as f32 + 1.0) * 360.0 / (n_torus as f32 - 1.0);
+            let v1 = (j as f32 + 1.0) * 360.0 / (n_tube as f32 - 1.0);
+
+            let p0 = math_func::torus_position(
+                r_torus, r_tube, Deg(u0), Deg(v0)
+            );
+            let p1 = math_func::torus_position(
+                r_torus, r_tube, Deg(u1), Deg(v0)
+            );
+            let p2 = math_func::torus_position(
+                r_torus, r_tube, Deg(u1), Deg(v1)
+            );
+            let p3 = math_func::torus_position(
+                r_torus, r_tube, Deg(u0), Deg(v1)
+            );
+
+            // positions
+            positions.push(p0);
+            positions.push(p1);
+            positions.push(p2);
+            positions.push(p2);
+            positions.push(p3);
+            positions.push(p0);
+
+            // normals
+            let ca = Vector3::new(
+                p2[0]-p0[0], p2[1]-p0[1], p2[2]-p0[2]
+            );
+            let db = Vector3::new(
+                p3[0]-p1[0], p3[1]-p1[1], p3[2]-p1[2]
+            );
+            let cp = ca.cross(db).normalize();
+            normals.push([cp[0], cp[1], cp[2]]);
+            normals.push([cp[0], cp[1], cp[2]]);
+            normals.push([cp[0], cp[1], cp[2]]);
+            normals.push([cp[0], cp[1], cp[2]]);
+            normals.push([cp[0], cp[1], cp[2]]);
+            normals.push([cp[0], cp[1], cp[2]]);
+        }
+    }
+
+    (positions, normals)
+}
+
 pub fn cube_positions() -> Vec<[i8; 3]> {
     [
         // front (0, 0, 1)
